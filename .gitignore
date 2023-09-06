@@ -5,6 +5,7 @@ wandb
 models
 *.txt
 !requirements.txt
+!sample_spider_seq2seq.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
