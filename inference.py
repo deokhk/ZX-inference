@@ -1,37 +1,40 @@
 import os
 import json
+import random 
 import torch
 import argparse
+import logging 
 import torch.optim as optim
-import transformers
-import wandb 
 import torch.nn as nn
 
 from tqdm.auto import tqdm
 from tokenizers import AddedToken
-from accelerate import Accelerator
 
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, MT5ForConditionalGeneration, AutoModelForSeq2SeqLM
-from transformers.optimization import Adafactor
 from transformers.trainer_utils import set_seed
-from utils.spider_metric.evaluator import EvaluateTool
 from utils.load_dataset import Text2SQLDataset
-from utils.text2sql_decoding_utils import decode_sqls, decode_natsqls
 
+logging.basicConfig(format='%(asctime)s - %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    level=logging.INFO)
+
+
+logger = logging.getLogger(__name__)
 
 
 def main(opt):
-    # Note : for test, we didn't apply acclerators due to complexity of inference
     set_seed(opt.seed)
-    print(opt)
+
+    logger.info(f"Model class: {opt.model_class}")
+    logger.info(f"Batch size: {opt.batch_size}")
 
     import time
     start_time = time.time()
         
     # initialize tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
-        opt.save_path,
+        opt.model_name_or_path,
         add_prefix_space = True
     )
     
@@ -51,19 +54,32 @@ def main(opt):
         drop_last = False
     )
 
+    
+    # Extract gold sqls, which will be used after 
+    with open(opt.dev_filepath, "r", encoding = 'utf-8') as f:
+        dev_data = json.load(f)
+    
+    gold_questions = []
+    gold_sqls = []
+
+    for data in dev_data:
+        gold_questions.append(data["input_sequence"].split("utterance:")[1].split(" | ")[0].strip())
+        gold_sqls.append(data["output_sequence"].split("<sql>")[1].strip())
+
+
     model_class = MT5ForConditionalGeneration if "mt5" in opt.model_name_or_path else AutoModelForSeq2SeqLM
 
     # initialize model
-    model = model_class.from_pretrained(opt.save_path)
+
+    logger.info("Loading model...")
+    model = model_class.from_pretrained(opt.model_name_or_path)
     if torch.cuda.is_available():
         model = model.cuda()
 
     model.eval()
     predict_sqls = []
-    for batch in tqdm(dev_dataloder):
+    for batch in tqdm(dev_dataloder, desc="Inferencing.."):
         batch_inputs = [data[0] for data in batch]
-        batch_db_ids = [data[1] for data in batch]
-        batch_tc_original = [data[2] for data in batch]
 
         tokenized_inputs = tokenizer(
             batch_inputs, 
@@ -92,21 +108,14 @@ def main(opt):
             model_outputs = model_outputs.view(len(batch_inputs), opt.num_return_sequences, model_outputs.shape[1])
 
             batch_size = model_outputs.shape[0]
-
-            final_sqls = []
             for batch_id in range(batch_size):
-                db_id = batch_db_ids[batch_id]
                 
                 pred_sequence = tokenizer.decode(model_outputs[batch_id, 0, :], skip_special_tokens = True)
 
                 pred_sql = pred_sequence.split("<sql>")[-1].strip()
                 pred_sql = pred_sql.replace("='", "= '").replace("!=", " !=").replace(",", " ,")
                     
-                final_sqls.append(pred_sql)
-
-
-
-
+                predict_sqls.append(pred_sql)
     
     new_dir = "/".join(opt.output.split("/")[:-1]).strip()
     if new_dir != "":
@@ -118,16 +127,33 @@ def main(opt):
             f.write(pred + "\n")
     
     end_time = time.time()
-    print("Text-to-SQL inference spends {}s.".format(end_time-start_time))
+    logger.info("Text-to-SQL inference spends {}s.".format(end_time-start_time))
+
+    logger.info("Now showing some examples of predicted SQLs, along with gold SQLs:")
+    
+    count = 0
+
+    for id, (question, pred_sql, gold_sql) in enumerate(zip(gold_questions, predict_sqls, gold_sqls)):
+
+        logger.info("=============================================================")
+        logger.info(f"Question: {question}")
+        logger.info(f"Predicted SQL: {pred_sql}")
+        logger.info(f"Gold SQL: {gold_sql}")
+
+        count +=1 
+        if count == 5:
+            break
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type = int, default = 42,
                         help = 'random seed.')
+    parser.add_argument('--device', default="0")
     parser.add_argument('--batch_size', type = int, default = 8)
-    parser.add_argument("--model_name_or_path", type = str, default = "t5-small")
-    parser.add_argument("--save_path", type = str, default = "./checkpoints/t5-small")
+    parser.add_argument("--model_class", type = str, default = "t5-small")
+    parser.add_argument("--model_name_or_path", type = str, default = "./checkpoints/t5-small")
+
     parser.add_argument('--num_beams', type = int, default = 8,
                         help = 'beam size in model.generate() function.')
     parser.add_argument('--num_return_sequences', type = int, default = 8,
@@ -136,5 +162,6 @@ if __name__ == "__main__":
     parser.add_argument('--dev_filepath', type = str, default = "data/preprocessed_data/resdsql_dev.json",
                         help = 'file path of test2sql dev set.')
 
+    parser.add_argument("--output", type = str, default = "predicted_sql.txt")
     opt = parser.parse_args()
     main(opt)

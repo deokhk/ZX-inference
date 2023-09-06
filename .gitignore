@@ -1,7 +1,5 @@
 *.out
 third_party
-database
-dataset
 data
 wandb
 models
