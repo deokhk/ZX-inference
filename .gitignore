@@ -1,6 +1,5 @@
 *.out
 third_party
-data
 wandb
 models
 *.txt
