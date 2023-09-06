@@ -1,12 +1,17 @@
 # ZX-inference
 Inference scripts for text2sql 
 
-[Step 0: Git repo 다운로드 & 모델 checkpoint download]
+[Step 0: Git repo clone & model checkpoint download]
 ```
 git clone https://github.com/deokhk/ZX-inference.git
 cd ZX-inference
 mkdir models 
 ```
+Link (https://drive.google.com/file/d/1P4YRYr0YKNSza7t9jqCjK9BVg5SiLaD5/view?usp=sharing) 에서 text2sql_mt0_ckpt.zip download한 후, models directiory에 저장
+```
+unzip text2sql_mt0_ckpt.zip
+```
+models directory에서 unzip
 
 [Step 1: 환경 설치]
 ```
