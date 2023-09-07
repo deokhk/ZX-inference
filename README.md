@@ -9,7 +9,8 @@ mkdir models
 ```
 Link (https://drive.google.com/file/d/1P4YRYr0YKNSza7t9jqCjK9BVg5SiLaD5/view?usp=sharing) 에서 text2sql_mt0_ckpt.zip download한 후, models directiory에 저장
 ```
-unzip text2sql_mt0_ckpt.zip
+gdown "https://drive.google.com/uc?id=1P4YRYr0YKNSza7t9jqCjK9BVg5SiLaD5"
+unzip -d text2sql_mt0_ckpt text2sql_mt0_ckpt.zip
 ```
 models directory에서 unzip
 
