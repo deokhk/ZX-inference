@@ -74,6 +74,7 @@ def main(opt):
     logger.info("Loading model...")
     model = model_class.from_pretrained(opt.model_name_or_path)
     if torch.cuda.is_available():
+        print("cuda available")
         model = model.cuda()
 
     model.eval()
